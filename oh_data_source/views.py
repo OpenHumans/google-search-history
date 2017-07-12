@@ -1,12 +1,17 @@
 import logging
 import os
 
-from django.conf import settings
-from django.contrib.auth import login
-from django.shortcuts import redirect, render
+import arrow
 import requests
 
-from .models import OpenHumansMember
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import login
+from django.http import HttpResponseRedirect
+from django.shortcuts import redirect, render
+
+from .forms import UploadFileForm
+from .models import OpenHumansMember, RawTakeoutData
 from .tasks import xfer_to_open_humans
 
 # Open Humans settings
@@ -83,11 +88,45 @@ def oh_code_to_member(code):
 
 def index(request):
     """
-    Starting page for app.
+    Main page for app: invites login, or displays upload form and data.
     """
-    context = {'client_id': settings.OH_CLIENT_ID,
-               'oh_proj_page': settings.OH_ACTIVITY_PAGE}
+    oh_member = None
+    oh_data = None
+    form = None
 
+    if request.user.is_authenticated:
+        oh_member = request.user.openhumansmember
+        oh_data = oh_get_member_data(oh_member.get_access_token())
+
+        if request.method == 'POST':
+            form = UploadFileForm(request.POST, request.FILES)
+            if form.is_valid():
+                logger.debug('Valid form!!!')
+                try:
+                    uploaded = RawTakeoutData.objects.get(user=request.user)
+                    uploaded.delete()
+                except RawTakeoutData.DoesNotExist:
+                    pass
+                uploaded = RawTakeoutData(datafile=request.FILES['file'],
+                                          user=request.user)
+                uploaded.save()
+                oh_member.last_xfer_datetime = arrow.get().format()
+                oh_member.last_xfer_status = 'Queued'
+                oh_member.save()
+                xfer_to_open_humans.delay(
+                    oh_id=oh_member.oh_id, file_id=uploaded.id)
+                messages.success(request, 'Data processing initiated')
+            else:
+                logger.debug('INVALID FORM')
+        else:
+            form = UploadFileForm()
+
+    context = {'client_id': settings.OH_CLIENT_ID,
+               'oh_proj_page': settings.OH_ACTIVITY_PAGE,
+               'form': form,
+               'oh_member': oh_member,
+               'oh_data': oh_data,
+               }
     return render(request, 'oh_data_source/index.html', context=context)
 
 
@@ -105,16 +144,24 @@ def complete(request):
     if oh_member:
 
         # Log in the user.
-        # (You may want this if connecting user with another OAuth process.)
         user = oh_member.user
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
-        # Initiate a data transfer task, then render 'complete.html'.
-        xfer_to_open_humans.delay(oh_id=oh_member.oh_id)
-        context = {'oh_id': oh_member.oh_id,
-                   'oh_proj_page': settings.OH_ACTIVITY_PAGE}
-        return render(request, 'oh_data_source/complete.html',
-                      context=context)
+        # Return user to index, which should now display a form.
+        return redirect('/')
 
     logger.debug('Invalid code exchange. User returned to starting page.')
+    return redirect('/')
+
+
+def deletedata(request):
+    if request.user.is_authenticated:
+        try:
+            data = RawTakeoutData.objects.get(user=request.user)
+            data.delete()
+            messages.info(request, 'Data deleted.')
+        except RawTakeoutData.DoesNotExist:
+            pass
+    else:
+        messages.error(request, 'Error re: Data deletion. User not logged in.')
     return redirect('/')

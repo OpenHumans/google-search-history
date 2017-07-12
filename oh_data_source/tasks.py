@@ -12,13 +12,16 @@ import os
 import shutil
 import tempfile
 import textwrap
-from urllib2 import HTTPError
+try:
+    from urllib2 import HTTPError
+except ImportError:
+    from urllib.error import HTTPError
 
 from celery import shared_task
 from django.utils import lorem_ipsum
 import requests
 
-from .models import OpenHumansMember
+from .models import OpenHumansMember, RawTakeoutData
 
 OH_API_BASE = 'https://www.openhumans.org/api/direct-sharing'
 OH_EXCHANGE_TOKEN = OH_API_BASE + '/project/exchange-member/'
@@ -28,21 +31,24 @@ OH_DIRECT_UPLOAD_COMPLETE = OH_API_BASE + '/project/files/upload/complete/'
 
 
 @shared_task
-def xfer_to_open_humans(oh_id, num_submit=0, logger=None, **kwargs):
+def xfer_to_open_humans(oh_id, file_id, num_submit=0, logger=None, **kwargs):
     """
     Transfer data to Open Humans.
 
     num_submit is an optional parameter in case you want to resubmit failed
     tasks (see comments in code).
     """
-    print('Trying to copy data for {} to Open Humans'.format(oh_id))
+    print('Trying to copy data for {} to Open Humans, file {}'.format(
+        oh_id, file_id))
     oh_member = OpenHumansMember.objects.get(oh_id=oh_id)
+    rawdata = RawTakeoutData.objects.get(id=file_id)
 
     # Make a tempdir for all temporary files.
     # Delete this even if an exception occurs.
     tempdir = tempfile.mkdtemp()
     try:
-        add_data_to_open_humans(oh_member, tempdir)
+        pass
+        # process_and_add_data_to_oh(oh_member, rawdata, tempdir)
     finally:
         shutil.rmtree(tempdir)
 
@@ -56,7 +62,7 @@ def xfer_to_open_humans(oh_id, num_submit=0, logger=None, **kwargs):
     #     return
 
 
-def add_data_to_open_humans(oh_member, tempdir):
+def process_and_add_data_to_oh(oh_member, rawdata, tempdir):
     """
     Add demonstration file to Open Humans.
 
@@ -67,7 +73,7 @@ def add_data_to_open_humans(oh_member, tempdir):
     files you plan to upload to Open Humans.
     """
     # Create example file.
-    data_filepath, data_metadata = make_example_datafile(tempdir)
+    data_filepath, data_metadata = process_rawdata(rawdata, tempdir)
 
     # Remove any files with this name previously added to Open Humans.
     delete_oh_file_by_name(oh_member, filename=os.path.basename(data_filepath))
@@ -76,7 +82,7 @@ def add_data_to_open_humans(oh_member, tempdir):
     upload_file_to_oh(oh_member, data_filepath, data_metadata)
 
 
-def make_example_datafile(tempdir):
+def process_rawdata(rawdata, tempdir):
     """
     Make a lorem-ipsum file in the tempdir, for demonstration purposes.
     """

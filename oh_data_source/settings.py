@@ -150,3 +150,6 @@ STATIC_URL = '/static/'
 # https://warehouse.python.org/project/whitenoise/
 # See also https://devcenter.heroku.com/articles/django-assets
 STATICFILES_STORAGE = 'whitenoise.django.GzipManifestStaticFilesStorage'
+
+# Uploaded files
+MEDIA_ROOT = os.path.join(BASE_DIR, 'uploaded_files')

@@ -12,6 +12,13 @@ OH_CLIENT_ID = os.getenv('OH_CLIENT_ID', '')
 OH_CLIENT_SECRET = os.getenv('OH_CLIENT_SECRET', '')
 
 
+def get_upload_path(instance, filename):
+    """
+    Place file in directory matching Open Humans Project Member ID.
+    """
+    return '{0}/{1}'.format(instance.user.openhumansmember.oh_id, filename)
+
+
 def make_unique_username(base):
     """
     Ensure a unique username. Probably this never actually gets used.
@@ -42,6 +49,8 @@ class OpenHumansMember(models.Model):
     access_token = models.CharField(max_length=256)
     refresh_token = models.CharField(max_length=256)
     token_expires = models.DateTimeField()
+    last_xfer_datetime = models.DateTimeField(null=True)
+    last_xfer_status = models.TextField(blank=True)
 
     @staticmethod
     def get_expiration(expires_in):
@@ -92,3 +101,12 @@ class OpenHumansMember(models.Model):
             self.refresh_token = data['refresh_token']
             self.token_expires = self.get_expiration(data['expires_in'])
             self.save()
+
+
+@python_2_unicode_compatible
+class RawTakeoutData(models.Model):
+    """
+    Raw takeout data uploaded by a user.
+    """
+    datafile = models.FileField(upload_to=get_upload_path)
+    user = models.OneToOneField(User)
