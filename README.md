@@ -1,41 +1,11 @@
-# Open Humans Data Source template
+# Google Search History
 
 ## About
 
-This is a template Django/Celery app you can use to create an OAuth2 data
-source activity for Open Humans. It takes care of some common tasks, and is
-also a demo for any project interested in using Open Humans APIs.
-
-### Why Django instead of Flask?
-
-Because small projects sometimes grow.
-
-## Some highlights
-
-### Open Humans authorization
-
-The `complete` function view in `oh_data_source.views` handles receiving
-a code from Open Humans, exchanging it for a token, using the token to
-retrieve project member ID, and stores this in the `OpenHumansMember` model.
-
-### Asynchronous tasks
-
-The `oh_data_source.celery` sets up asynchronous tasks for the app. This is
-used to asynchronously run `xfer_to_open_humans` in `oh_data_source.tasks`.
-
-#### Why asynchonous?
-
-Sometimes it takes a long time. This is bad, the web app will not process
-other requests.
-
-### Upload to Open Humans
-
-Template code for uploading an example file to a member account, as well as
-demo code for file deletion.
+This is a Django/Celery app used to process Google Takeout data to extract
+search data, process it, and add the results to Open Humans as a data source.
 
 ## Local development instructions
-
-Django, and thus this project are built on top of `python2.7`, if you are using `python3` as your default system, you will most definitely need a `virtualenv` to work with this code.
 
 ### Local requirements.
 
@@ -43,18 +13,14 @@ Django, and thus this project are built on top of `python2.7`, if you are using 
 2. RabbitMQ https://www.rabbitmq.com/download.html
 3. pip https://pip.pypa.io/en/stable/installing/
 
-### Install Python 2.7 requirements.
+### Install Python requirements.
 
 **It is Strongly recommend you use [virtualenv](https://virtualenv.pypa.io/en/stable/).**
 **Be advised you need to use a name other than the default `.env` for the python environment; we suggest `.env_$YOURPROJECT`**
 
 To create your 'virtualenv' run:
 
-  `virtualenv -v --python=python2.7 .env_$YOURPROJECT`
-
-  The two flags we are using `-v` makes the setup verbose, allowing easier debugging.
-
-  The second flag `--python=python2.7` guarantees that no matter how many versions of python you have on your system the 'virtualenv' will be built with the 'Django' standard `python2.7`.
+  `virtualenv -v --python=python3 .env_$YOURPROJECT`
 
 To activate your 'virtualenv' you need to run:
 
@@ -62,7 +28,7 @@ To activate your 'virtualenv' you need to run:
 
 Next install all of the required python dependancies with:
 
-  `pip install -r requirements.txt`
+  `pip install -r requirements_p3.txt`
 
 ---
 
