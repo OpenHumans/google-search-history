@@ -107,6 +107,7 @@ def index(request):
                     uploaded.delete()
                 except RawTakeoutData.DoesNotExist:
                     pass
+                print(request.POST)
                 uploaded = RawTakeoutData(datafile=request.FILES['file'],
                                           user=request.user)
                 uploaded.save()
@@ -114,7 +115,9 @@ def index(request):
                 oh_member.last_xfer_status = 'Queued'
                 oh_member.save()
                 xfer_to_open_humans.delay(
-                    oh_id=oh_member.oh_id, file_id=uploaded.id)
+                    oh_id=oh_member.oh_id, file_id=uploaded.id,
+                    granularity=request.POST['granularity'],
+                    search_string=request.POST['search_string'])
                 messages.success(request, 'Data processing initiated')
             else:
                 logger.debug('INVALID FORM')

@@ -71,9 +71,35 @@
         <p>
           Upload again to restart and overwrite.
         </p>
+        {% endwith %}
+        {% endif %}
+
         <form method="post" enctype="multipart/form-data" action="{% url 'home' %}">
+          {% if form.errors %}
+          <div class="well">
+            <b>Errors</b><br>
+            {{ form.errors }}
+          </div>
+          {% endif %}
           {% csrf_token %}
           <p>
+            <b>Word list or full search string?</b><br>
+            For example: <pre>'sex with teacher data'</pre> vs.
+            <pre>['data', 'sex', 'teacher', 'with']</pre><br>
+            <input type="radio" name="search_string" value="full">Full search string (raw)<br>
+            <input type="radio" name="search_string" value="words">Word list<br>
+          </p>
+          <p>
+            <b>Data granularity</b><br>
+            <input type="radio" name="granularity" value="raw"> Raw<br>
+            <input type="radio" name="granularity" value="hour"> By hour<br>
+            <input type="radio" name="granularity" value="day"> By day<br>
+            <input type="radio" name="granularity" value="week"> By week<br>
+            <input type="radio" name="granularity" value="month"> By month<br>
+            <input type="radio" name="granularity" value="year"> By year<br>
+          </p>
+          <p>
+            <b>Google Takeout Zip file:</b><br>
             <input type="file" name="file">
           </p>
           <input class="btn btn-primary" type="submit" value="Process and transfer search data">
@@ -84,18 +110,6 @@
           {% csrf_token %}
           <input class="btn btn-danger" type="submit"
             value="Cancel and delete uploaded data">
-        </form>
-        {% endif %}
-        {% endwith %}
-
-        {# invite upload #}
-        {% else %}
-        <form method="post" enctype="multipart/form-data" action="{% url 'home' %}">
-          {% csrf_token %}
-          <p>
-            <input type="file" name="file">
-          </p>
-          <input class="btn btn-primary" type="submit" value="Process and transfer search data">
         </form>
         {% endif %}
 

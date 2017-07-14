@@ -22,6 +22,7 @@ from django.utils import lorem_ipsum
 import requests
 
 from .models import OpenHumansMember, RawTakeoutData
+from .processing import load_search_data, process_search_data
 
 OH_API_BASE = 'https://www.openhumans.org/api/direct-sharing'
 OH_EXCHANGE_TOKEN = OH_API_BASE + '/project/exchange-member/'
@@ -31,7 +32,8 @@ OH_DIRECT_UPLOAD_COMPLETE = OH_API_BASE + '/project/files/upload/complete/'
 
 
 @shared_task
-def xfer_to_open_humans(oh_id, file_id, num_submit=0, logger=None, **kwargs):
+def xfer_to_open_humans(oh_id, file_id, granularity, search_string,
+                        num_submit=0, logger=None, **kwargs):
     """
     Transfer data to Open Humans.
 
@@ -47,10 +49,18 @@ def xfer_to_open_humans(oh_id, file_id, num_submit=0, logger=None, **kwargs):
     # Delete this even if an exception occurs.
     tempdir = tempfile.mkdtemp()
     try:
-        pass
-        # process_and_add_data_to_oh(oh_member, rawdata, tempdir)
+        process_and_add_data_to_oh(oh_member, rawdata, granularity,
+                                   search_string, tempdir)
     finally:
-        shutil.rmtree(tempdir)
+        try:
+            if oh_member.last_xfer_status != 'Complete':
+                oh_member.last_xfer_status = 'Failed'
+                oh_member.save()
+        finally:
+            try:
+                oh_member.user.rawtakeoutdata.delete()
+            finally:
+                shutil.rmtree(tempdir)
 
     # Note: Want to re-run tasks in case of a failure?
     # You can resubmit a task by calling it again. (Be careful with recursion!)
@@ -62,18 +72,23 @@ def xfer_to_open_humans(oh_id, file_id, num_submit=0, logger=None, **kwargs):
     #     return
 
 
-def process_and_add_data_to_oh(oh_member, rawdata, tempdir):
+def process_and_add_data_to_oh(oh_member, rawdata, granularity,
+                               search_string, tempdir):
     """
-    Add demonstration file to Open Humans.
+    Process Google search data from Takeout ZIP and add to Open Humans.
 
-    This might be a good place to start editing, to add your own project data.
-
-    This template is written to provide the function with a tempdir that
-    will be cleaned up later. You can use the tempdir to stage the creation of
-    files you plan to upload to Open Humans.
+    This function has a tempdir that will be cleaned up later, to stage the
+    creation of files and ensure clean-up occurs.
     """
+    loaded_data, timestamps = load_search_data(rawdata)
+    timestamps.sort()
+    processed_data = process_search_data(
+        loaded_data, timestamps, granularity=granularity,
+        search_string=search_string)
+
     # Create example file.
-    data_filepath, data_metadata = process_rawdata(rawdata, tempdir)
+    data_filepath, data_metadata = make_datafile(
+        processed_data, granularity, search_string, oh_member, tempdir)
 
     # Remove any files with this name previously added to Open Humans.
     delete_oh_file_by_name(oh_member, filename=os.path.basename(data_filepath))
@@ -81,20 +96,29 @@ def process_and_add_data_to_oh(oh_member, rawdata, tempdir):
     # Upload this file to Open Humans.
     upload_file_to_oh(oh_member, data_filepath, data_metadata)
 
+    oh_member.last_xfer_status = 'Complete'
+    oh_member.save()
 
-def process_rawdata(rawdata, tempdir):
+
+def make_datafile(processed_data, granularity, search_string, oh_member, tempdir):
     """
-    Make a lorem-ipsum file in the tempdir, for demonstration purposes.
+    Make a file in the tempdir with processed data.
     """
-    filepath = os.path.join(tempdir, 'example_data.txt')
-    paras = lorem_ipsum.paragraphs(3, common=True)
-    output_text = '\n'.join(['\n'.join(textwrap.wrap(p)) for p in paras])
-    with open(filepath, 'w') as f:
-        f.write(output_text)
-    metadata = {
-        'tags': ['example', 'text', 'demo'],
-        'description': 'File with lorem ipsum text for demonstration purposes',
+    google_search_data = {
+        'granularity': granularity,
+        'search-data-format': search_string,
+        'data': processed_data,
     }
+
+    filepath = os.path.join(tempdir, 'google-search-data.json')
+    with open(filepath, 'w') as f:
+        json.dump(google_search_data, f)
+
+    metadata = {
+        'description': 'Google search data',
+        'tags': ['json']
+    }
+
     return filepath, metadata
 
 
@@ -128,21 +152,24 @@ def upload_file_to_oh(oh_member, filepath, metadata):
     # Get the S3 target from Open Humans.
     upload_url = '{}?access_token={}'.format(
         OH_DIRECT_UPLOAD, oh_member.get_access_token())
+    print(upload_url)
     req1 = requests.post(
         upload_url,
         data={'project_member_id': oh_member.oh_id,
               'filename': os.path.basename(filepath),
               'metadata': json.dumps(metadata)})
+    print(req1.status_code)
+    print(req1.text)
     if req1.status_code != 201:
-        raise HTTPError(code=req1.status_code,
-                        text='Bad response when starting file upload.')
+        raise HTTPError(upload_url, req1.status_code,
+                        'Bad response when starting file upload.')
 
     # Upload to S3 target.
     with open(filepath, 'rb') as fh:
         req2 = requests.put(url=req1.json()['url'], data=fh)
     if req2.status_code != 200:
-        raise HTTPError(code=req2.status_code,
-                        text='Bad response when uploading to target.')
+        raise HTTPError(req1.json()['url'], req2.status_code,
+                        'Bad response when uploading to target.')
 
     # Report completed upload to Open Humans.
     complete_url = ('{}?access_token={}'.format(
@@ -152,8 +179,8 @@ def upload_file_to_oh(oh_member, filepath, metadata):
         data={'project_member_id': oh_member.oh_id,
               'file_id': req1.json()['id']})
     if req3.status_code != 200:
-        raise HTTPError(code=req2.status_code,
-                        text='Bad response when uploading to target.')
+        raise HTTPError(complete_url, req2.status_code,
+                        'Bad response when completing upload.')
 
     print('Upload done: "{}" for member {}.'.format(
         os.path.basename(filepath), oh_member.oh_id))
