@@ -45,7 +45,7 @@
       </p>
       {% if request.user.is_authenticated %}
 
-        {% if request.user.rawtakeoutdata %}
+        {% if request.user.openhumansmember.last_xfer_status %}
         {% with request.user.openhumansmember.last_xfer_status as status %}
         <div class="panel
             {% if 'Failed' in status or 'Aborted' in status %}panel-danger

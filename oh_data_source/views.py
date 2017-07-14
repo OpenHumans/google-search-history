@@ -6,7 +6,7 @@ import requests
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 
@@ -96,7 +96,11 @@ def index(request):
 
     if request.user.is_authenticated:
         oh_member = request.user.openhumansmember
-        oh_data = oh_get_member_data(oh_member.get_access_token())
+        try:
+            oh_data = oh_get_member_data(oh_member.get_access_token())
+        except:
+            logout(request)
+            return redirect('/')
 
         if request.method == 'POST':
             form = UploadFileForm(request.POST, request.FILES)
@@ -114,7 +118,7 @@ def index(request):
                 oh_member.last_xfer_datetime = arrow.get().format()
                 oh_member.last_xfer_status = 'Queued'
                 oh_member.save()
-                xfer_to_open_humans.delay(
+                xfer_to_open_humans(
                     oh_id=oh_member.oh_id, file_id=uploaded.id,
                     granularity=request.POST['granularity'],
                     search_string=request.POST['search_string'])
