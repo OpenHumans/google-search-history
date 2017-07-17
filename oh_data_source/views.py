@@ -7,7 +7,6 @@ import requests
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
-from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 
 from .forms import UploadFileForm
@@ -18,7 +17,8 @@ from .tasks import xfer_to_open_humans
 OH_BASE_URL = 'https://www.openhumans.org'
 
 APP_BASE_URL = os.getenv('APP_BASE_URL', 'http://127.0.0.1:5000')
-APP_PROJ_PAGE = 'https://www.openhumans.org/activity/seeq/'
+REDIRECT_URI = '{}/complete'.format(APP_BASE_URL)
+
 
 # Set up logging.
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def oh_code_to_member(code):
     if settings.OH_CLIENT_SECRET and settings.OH_CLIENT_ID and code:
         data = {
             'grant_type': 'authorization_code',
-            'redirect_uri': '{}/complete'.format(APP_BASE_URL),
+            'redirect_uri': REDIRECT_URI,
             'code': code,
         }
         req = requests.post(
@@ -129,6 +129,7 @@ def index(request):
             form = UploadFileForm()
 
     context = {'client_id': settings.OH_CLIENT_ID,
+               'redirect_uri': REDIRECT_URI,
                'oh_proj_page': settings.OH_ACTIVITY_PAGE,
                'form': form,
                'oh_member': oh_member,
@@ -172,3 +173,9 @@ def deletedata(request):
     else:
         messages.error(request, 'Error re: Data deletion. User not logged in.')
     return redirect('/')
+
+
+def logout_user(request):
+    if request.method == 'POST':
+        logout(request)
+    return('/')

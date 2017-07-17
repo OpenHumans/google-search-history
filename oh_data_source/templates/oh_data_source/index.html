@@ -74,6 +74,19 @@
         {% endwith %}
         {% endif %}
 
+        <h3>Get Google Survey Data</h3>
+        <ol>
+          <li>
+            Go to Google Takeout:
+            <a href="https://takeout.google.com/settings/takeout">https://takeout.google.com/settings/takeout</a>
+          </li>
+          <li>
+            Download ONLY search history.<br>
+            <img src="{% static 'oh_data_source/images/google-search-takeout.png' %}" style="border: 2px solid gray; width: 500px;">
+          </li>
+        </ol>
+        <hr>
+        <h3>Upload &amp; Process Google Survey Data</h3>
         <form method="post" enctype="multipart/form-data" action="{% url 'home' %}">
           {% if form.errors %}
           <div class="well">
@@ -132,7 +145,7 @@
         {% if client_id %}
         <a
           class="btn btn-primary btn-lg"
-          href="https://www.openhumans.org/direct-sharing/projects/oauth2/authorize/?client_id={{ client_id }}&response_type=code"
+          href="https://www.openhumans.org/direct-sharing/projects/oauth2/authorize/?client_id={{ client_id }}&response_type=code&redirect_uri={{ redirect_uri }}"
           {% else %}
           class="btn btn-default disabled"
           {% endif %}
@@ -145,8 +158,15 @@
         </i></p>
         {% endif %}
       {% endif %}
+      {% if request.user.is_authenticated %}
+      <hr>
+      <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <input class="btn btn-danger" type="submit"
+          value="Log out">
+      </form>
+      {% endif %}
     </div>
-
     <!-- Bootstrap core JavaScript
     ================================================== -->
     <!-- Placed at the end of the document so the pages load faster -->
